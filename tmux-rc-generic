@@ -1,0 +1,166 @@
+#!/bin/bash
+# /etc/init.d/minecraft
+# version 0.4.0 2015-04-20 (YYYY-MM-DD)
+#
+### BEGIN INIT INFO
+# Provides:   minecraft
+# Required-Start: $local_fs $remote_fs screen-cleanup
+# Required-Stop:  $local_fs $remote_fs
+# Should-Start:   $network
+# Should-Stop:    $network
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description:    Minecraft server
+# Description:    Starts the minecraft server
+### END INIT INFO
+
+#Settings
+MC_JAR='minecraft_server.jar'
+MC_OPTIONS='nogui'
+MC_PATH='/home/minecraft/minecraft'
+MC_MAXHEAP=2048
+MC_MINHEAP=1024
+MC_CPU_COUNT=1
+MINECRAFT_UP_CMD="java -Xmx${MC_MAXHEAP}M -Xms${MC_MINHEAP}M -XX:+UseConcMarkSweepGC \
+-XX:+CMSIncrementalPacing -XX:ParallelGCThreads=$MC_CPU_COUNT -XX:+AggressiveOpts \
+-jar $MC_JAR $MC_OPTIONS | tee -a $MC_PATH/stdout.log"
+
+#COnfigure these vars as needed
+SVC_DIR=/home/minecraft/minecraft
+SVC_UP="$MINECRAFT_UP_CMD"
+SVC_NAME="$MC_JAR"
+SVC_USER='minecraft'
+SVC_TMUX='minecraft'
+SVC_STOP_CMD="save-allstop"
+SVC_GROUP="services"
+
+######################################################
+ME=`whoami`
+TMUX=tmux
+
+as_user() {
+  if [ "$ME" = "$SVC_USER" ] ; then
+    echo "Running as me..."
+    bash -c "$1"
+  else
+    echo "Running as su - $SVC_USER"
+    su - "$SVC_USER" -c "$1"
+  fi
+}
+
+
+#Inputs  : Username, Service name
+#Returns : 1 if the service is running, 0 if not
+service_is_running()
+{
+    if pgrep -u "$1" -f "$2" > /dev/null; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+#Inputs: Number of seconds (approx) to wait
+#Returns: 0 if service exited, 1 if timed out waiting
+wait_for_service_to_exit()
+{
+    typeset TIMEOUT=$1
+    if [ -z $TIMEOUT ]; then
+        TIMEOUT=10
+    fi
+    
+    TIMEOUT=$((TIMEOUT * 10))
+    typeset WAITING=1
+    while [ $WAITING -eq 1 -a $TIMEOUT -ne 0 ]; do
+        service_is_running $SVC_USER $SVC_NAME
+        WAITING=$?
+        if [ $WAITING -eq 1 ]; then
+            sleep 0.1
+        fi
+        TIMEOUT=$((TIMEOUT - 1))
+    done
+    
+    return $WAITING
+}
+
+svc_start() {
+    service_is_running $SVC_USER $SVC_NAME
+    if [ $? -eq 1 ]; then
+        echo "Service [$SVC_NAME] as user [$SVC_USER] is already running"
+        return
+    else
+        echo "Starting [$SVC_NAME] as user [$SVC_USER]"
+        as_user "cd $SVC_DIR && $TMUX -S /tmp/$SVC_TMUX new -d \"$SVC_UP\""
+        as_user "chgrp $SVC_GROUP /tmp/$SVC_TMUX"
+    fi
+
+    service_is_running $SVC_USER $SVC_NAME
+    if [ $? -eq 1 ]; then
+        echo "Success: service [$SVC_NAME] running as user [$SVC_USER]"
+        echo "Run tmux -S /tmp/$SVC_TMUX attach to interface with the server directly"
+    else
+        echo "Failed to run [$SVC_NAME] as user [$SVC_USER]"
+    fi
+}
+
+svc_stop() {
+    service_is_running $SVC_USER $SVC_NAME
+    if [ $? -eq 1 ]; then
+        echo "Stopping $SVC_NAME"
+        svc_send_keys "$SVC_STOP_CMD"
+    else
+        echo "$SVC_NAME was not running."
+    fi
+
+    wait_for_service_to_exit 5
+
+    if [ $? -eq 1 ]; then
+        echo "Error! $SVC_NAME could not be stopped."
+    else
+        echo "$SERVICE is stopped."
+    fi
+}
+
+svc_send_keys() {
+    typeset KEYS="$@"
+    $TMUX -S /tmp/$SVC_TMUX send-keys -l "$KEYS"
+}
+
+#Start-Stop here
+case "$1" in
+    start)
+        svc_start
+        ;;
+    stop)
+        svc_stop
+        ;;
+    restart)
+        svc_stop
+        svc_start
+        ;;
+    stat)
+        service_is_running $SVC_USER $SVC_NAME
+        if [ $? -eq 1 ]; then
+            echo "$SVC_NAME is running."
+        else
+            echo "$SVC_NAME is not running."
+        fi
+        ;;
+    command)
+        if [ $# -gt 1 ]; then
+            shift
+            echo "Sending keys '$@'"
+            svc_send_keys "$@" 
+        else
+            echo "Must specify server command (try 'help'?)"
+        fi
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|status|restart|"\
+             "command \"server command\"}"
+        exit 1
+        ;;
+esac
+
+exit 0
