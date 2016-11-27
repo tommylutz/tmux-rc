@@ -1,0 +1,41 @@
+#!/bin/bash
+# /etc/init.d/noip
+# version 0.1.0 2016-11-26 (YYYY-MM-DD)
+#
+### BEGIN INIT INFO
+# Provides:   noip
+# Required-Start: $local_fs $remote_fs screen-cleanup
+# Required-Stop:  $local_fs $remote_fs
+# Should-Start:   $network
+# Should-Stop:    $network
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description:    noip updater
+# Description:    Starts the noip updater for tommylutz.hopto.org
+### END INIT INFO
+ME=$(whoami)
+SVC_USER=noip
+
+as_user() {
+  if [ "$ME" = "$SVC_USER" ] ; then
+    echo "Running as me..."
+    bash -c "$1"
+  else
+    echo "Running as su - $SVC_USER"
+    su - "$SVC_USER" -c "$1"
+  fi
+}
+
+case $1 in
+    start)
+        as_user "/home/noip/bin/noip2";;
+    stop)
+        as_user "killall -TERM /home/noip/bin/noip2";;
+    restart)
+        as_user "killall -TERM /home/noip/bin/noip2"
+        as_user "/home/noip/bin/noip2";;
+    *)
+        echo "Usage: $0 <start|stop>";;
+esac
+
+exit 0
