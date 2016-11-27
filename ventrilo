@@ -1,0 +1,28 @@
+#!/bin/bash
+# /etc/init.d/ventrilo
+# version 0.1.0 2016-11-26 (YYYY-MM-DD)
+#
+### BEGIN INIT INFO
+# Provides:   ventrilo
+# Required-Start: $local_fs $remote_fs screen-cleanup
+# Required-Stop:  $local_fs $remote_fs
+# Should-Start:   $network
+# Should-Stop:    $network
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description:    Ventrilo Server
+# Description:    Starts the Ventrilo Server
+### END INIT INFO
+
+#Settings
+#Variables required by tmux-rc-generic
+export SVC_DIR=/home/ventrilo/ventsrv
+export SVC_UP_CMD="./ventrilo_srv"
+export SVC_NAME="ventrilo_srv"
+export SVC_USER='ventrilo'
+export SVC_TMUX='ventrilo'
+export SVC_STOP_CMD="quit"
+export SVC_GROUP="ventrilo_admins"
+
+/usr/sbin/tmux-rc-generic "$@"
+

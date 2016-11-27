@@ -1,38 +1,62 @@
 #!/bin/bash
-# /etc/init.d/minecraft
-# version 0.4.0 2015-04-20 (YYYY-MM-DD)
+
+######## tmux-rc-generic ##########
+# This script is designed to help you set up servers running inside a shared
+# tmux session, started up by the init.d system. The canonical example usage
+# of this script is to manage a minecraft server.
 #
-### BEGIN INIT INFO
-# Provides:   minecraft
-# Required-Start: $local_fs $remote_fs screen-cleanup
-# Required-Stop:  $local_fs $remote_fs
-# Should-Start:   $network
-# Should-Stop:    $network
-# Default-Start:  2 3 4 5
-# Default-Stop:   0 1 6
-# Short-Description:    Minecraft server
-# Description:    Starts the minecraft server
-### END INIT INFO
+# To use this script, call it from your init.d script. Export the following
+# variables:
+#
+# Variable      Meaning
+# SVC_DIR       A path that we should cd to before bringing up the server
+# SVC_UP_CMD    The command used to bring up the server
+# SVC_NAME      A unique string that can be used to pgrep -f the process of the server.
+#               This is used to detect whether the server is up or down.
+# SVC_USER      The user the server should run as
+# SVC_TMUX      The name of the tmux socket in /tmp/
+# SVC_STOP_CMD  Characters to send to the tmux terminal to stop the server.
+#               For minecraft, this will be "save-all^Mstop"
+# SVC_GROUP     Optional unix group that will have access to directly manipulate
+#               the tmux session of the server using 
+#               $ tmux -S /tmp/$SVC_TMUX attach
+#
+# After exporting the above variables, the client script should invoke this script
+# as follows:
+# /usr/sbin/tmux-rc-generic "$@"
 
-#Settings
-MC_JAR='minecraft_server.jar'
-MC_OPTIONS='nogui'
-MC_PATH='/home/minecraft/minecraft'
-MC_MAXHEAP=2048
-MC_MINHEAP=1024
-MC_CPU_COUNT=1
-MINECRAFT_UP_CMD="java -Xmx${MC_MAXHEAP}M -Xms${MC_MINHEAP}M -XX:+UseConcMarkSweepGC \
--XX:+CMSIncrementalPacing -XX:ParallelGCThreads=$MC_CPU_COUNT -XX:+AggressiveOpts \
--jar $MC_JAR $MC_OPTIONS | tee -a $MC_PATH/stdout.log"
+die()
+{
+    echo "$@"
+    exit 1
+}
 
-#COnfigure these vars as needed
-SVC_DIR=/home/minecraft/minecraft
-SVC_UP="$MINECRAFT_UP_CMD"
-SVC_NAME="$MC_JAR"
-SVC_USER='minecraft'
-SVC_TMUX='minecraft'
-SVC_STOP_CMD="save-allstop"
-SVC_GROUP="services"
+validate_env_vars()
+{
+    if [[ ! -d "$SVC_DIR" ]]; then
+        die "Must set SVC_DIR to a valid directory"
+    fi
+    
+    if [[ -z "$SVC_UP_CMD" ]]; then
+        die "Must set SVC_UP_CMD to a valid command"
+    fi
+
+    if [[ -z "$SVC_NAME" ]]; then
+        die "Must set SVC_NAME to a unique string for the process"
+    fi
+
+    if [[ -z "$SVC_USER" ]]; then
+        die "Must set SVC_USER to a unix user"
+    fi
+
+    if [[ -z "$SVC_TMUX" ]]; then
+        die "Must set SVC_TMUX to the desired socket name in /tmp"
+    fi
+    
+    if [[ -z "$SVC_STOP_CMD" ]]; then
+        die "Must set SVC_STOP_CMD to the key sequence needed to kill the server"
+    fi
+}
 
 ######################################################
 ME=`whoami`
@@ -90,8 +114,10 @@ svc_start() {
         return
     else
         echo "Starting [$SVC_NAME] as user [$SVC_USER]"
-        as_user "cd $SVC_DIR && $TMUX -S /tmp/$SVC_TMUX new -d \"$SVC_UP\""
-        as_user "chgrp $SVC_GROUP /tmp/$SVC_TMUX"
+        as_user "cd $SVC_DIR && $TMUX -S /tmp/$SVC_TMUX new -d \"$SVC_UP_CMD\""
+        if [[ ! -z "$SVC_GROUP" ]]; then
+            as_user "chgrp $SVC_GROUP /tmp/$SVC_TMUX"
+        fi
     fi
 
     service_is_running $SVC_USER $SVC_NAME
@@ -125,6 +151,8 @@ svc_send_keys() {
     typeset KEYS="$@"
     $TMUX -S /tmp/$SVC_TMUX send-keys -l "$KEYS"
 }
+
+validate_env_vars
 
 #Start-Stop here
 case "$1" in

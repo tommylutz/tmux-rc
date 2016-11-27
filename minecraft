@@ -1,0 +1,38 @@
+#!/bin/bash
+# /etc/init.d/minecraft
+# version 0.1.0 2016-11-26 (YYYY-MM-DD)
+#
+### BEGIN INIT INFO
+# Provides:   minecraft
+# Required-Start: $local_fs $remote_fs screen-cleanup
+# Required-Stop:  $local_fs $remote_fs
+# Should-Start:   $network
+# Should-Stop:    $network
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description:    Minecraft server
+# Description:    Starts the minecraft server
+### END INIT INFO
+
+#Settings
+MC_JAR='minecraft_server.jar'
+MC_OPTIONS='nogui'
+MC_PATH='/home/minecraft/minecraft'
+MC_MAXHEAP=2048
+MC_MINHEAP=1024
+MC_CPU_COUNT=1
+MINECRAFT_UP_CMD="java -Xmx${MC_MAXHEAP}M -Xms${MC_MINHEAP}M -XX:+UseConcMarkSweepGC \
+-XX:+CMSIncrementalPacing -XX:ParallelGCThreads=$MC_CPU_COUNT -XX:+AggressiveOpts \
+-jar $MC_JAR $MC_OPTIONS | tee -a $MC_PATH/stdout.log"
+
+#Variables required by tmux-rc-generic
+export SVC_DIR=/home/minecraft/minecraft
+export SVC_UP_CMD="$MINECRAFT_UP_CMD"
+export SVC_NAME="$MC_JAR"
+export SVC_USER='minecraft'
+export SVC_TMUX='minecraft'
+export SVC_STOP_CMD="save-allstop"
+export SVC_GROUP="minecraft_admins"
+
+/usr/sbin/tmux-rc-generic "$@"
+
